@@ -16,41 +16,89 @@
  *     6 polige BME Variante versorgt mit 3,3V
  *     CSB = 3,3V (pullup)
  *     SDO = 3,3V (pullup)
- *
  */
 #include <Wire.h> // fuer I2C
+#include <ESP8266WiFi.h> // fuer WIFI ausschalten
 #include <Adafruit_BME280.h>
 
 // lcd display include
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
 
+#include <ezButton.h> // https://github.com/ArduinoGetStarted/button
+
 Adafruit_BME280 bme1;
 float temp1(NAN), hum1(NAN), press1(NAN);
 
 bool bme1SensorError = false; // bme sensor nicht vorhanden oder nicht ok?
+bool displayError = false; // display initialisierung fehlgeschlagen?
 
 // lcd defines
 #define OLED_RESET -1
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// #define D8 8 /// ACHTUNG ZEILE LOESCHEN WENN BOARD WIEDER D1 MINI!!!!
-#define CS D8
-#define countof(a) (sizeof(a) / sizeof(a[0]))
+//Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306* displayPtr = NULL;
+/* ACHTUNG: der display konstruktor allokiert dynamischen speicher,
+ * da das display aber zur laufzeit an und ausgeschaltet werden soll
+ * um strom zu sparen muss der dynamische speicher wieder freigegeben
+ * werden. da die implementierung in der bibliothek fix ist muessen 
+ * wir es bei uns loesen und da sind die new / delete operatoren
+ * die einzige moeglichkeit die ich aktuell sehe. */
+
+#define PIN_SCREEN_POWER D7
+#define PIN_BUTTON_ON D6
+
+ezButton buttonOn = ezButton(PIN_BUTTON_ON); // einfache lib (inkl. entprellen)
+                                             // fuer buttons die direkt am pin
+                                             // angeschlossen sind und nach 
+                                             // masse schalten
+
+void initDisplay(bool periphBegin = false) {
+    digitalWrite(PIN_SCREEN_POWER, HIGH); // display einschalten
+    delay(100); // etwas zeit geben zum spannung stabilisieren (WICHTIG)
+                // etwas grosszuegig, aber wir habens ja nicht eilig :)
+    if (displayPtr) {
+        Serial.println("display objekt erst loeschen");
+        delete displayPtr;
+        displayPtr = NULL;
+    }
+    if (!displayPtr) {
+        Serial.println("display objekt erfolgreich geloescht");
+    }
+    
+    displayPtr = new Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+    if (!displayPtr->begin(SSD1306_SWITCHCAPVCC, 0x3C, /*reset*/ true, /*periphBegin*/ periphBegin)){
+        Serial.println("display init error!");
+        displayError = true;
+        return;
+    }
+    displayPtr->setTextSize(2);
+    displayPtr->setTextColor(WHITE); // ohne Effekt -> das eingesetzte Display kann nur blau
+    displayPtr->clearDisplay();
+    displayPtr->setCursor(5, 0);
+    displayPtr->setTextSize(2);
+    displayPtr->println("Init");
+    displayPtr->display(); // Text zeigen
+}
+
 
 void setup()
 {
-
-    Serial.begin(9600);
-    // while (!Serial) ; // wait for serial
+    
+    Serial.begin(9600); // optional: aber praktisch fuer debug ausgaben ;)
+    // while (!Serial) ; 
     delay(1000);
     Serial.print("compiled: "); // kompilier zeitstempel ausgeben
     Serial.print(__DATE__);
     Serial.println(__TIME__);
-    pinMode(CS, OUTPUT);
     pinMode(LED_BUILTIN, OUTPUT);
+    buttonOn.setDebounceTime(50); // [ms]
+
+    pinMode(PIN_SCREEN_POWER, OUTPUT); // spannungsversorgung vom display
+    digitalWrite(PIN_SCREEN_POWER, HIGH); // display einschalten
 
     int i;
     for (i = 0; i < 5; i++) { // max 5x versuchen mit bme zu kommunizieren / initialisieren
@@ -67,49 +115,88 @@ void setup()
     } else {
         Serial.println("BME280 Sensor gefunden! ERFOLG!!");
     }
-
-    // display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-    // display.setTextSize(2);
-    // display.setTextColor(WHITE);
-    // display.clearDisplay();
-    // display.setCursor(5, 0);
-    // display.println("Hallo");
-    // display.setTextSize(2);
-    // display.setCursor(5, 30);
-    // display.print("Datenlogger");
-    // display.display(); // Text zeigen
-    delay(1000);
-}
-void print2digits(int number)
-{
-    if (number >= 0 && number < 10) {
-        Serial.write('0');
+    if (!displayPtr) {
+        Serial.println("init display");
+        displayPtr = new Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+    } else {
+        Serial.println("error display ptr not NULL");
     }
-    Serial.print(number);
+
+    initDisplay(true);
+    delay(2000);
+    displayPtr->clearDisplay();
+    if (bme1SensorError) {
+        displayPtr->setCursor(5, 0);
+        displayPtr->println("Sensor-");
+        displayPtr->setCursor(5, 30);
+        displayPtr->print("fehler");
+    } else {
+        displayPtr->setCursor(5, 0);
+        displayPtr->println("Hallo");
+        displayPtr->setTextSize(2);
+        displayPtr->setCursor(5, 30);
+        displayPtr->print("Datenlogger");
+    }
+    displayPtr->display(); // Text zeigen
+    WiFi.mode( WIFI_OFF );
+    //WiFi.mode( WIFI_AP );
+    //delay(2500);
+
+    //digitalWrite(PIN_SCREEN_POWER, LOW); // display ausschalten -> strom sparen
+    //WiFi.forceSleepBegin(); 
+
+    //ESP.deepSleep(10e6); // [us]
 }
+
 
 void loop()
 {
-    // displayTime(now);
-    Serial.println();
+    static unsigned long millisOld = 0;
+    static unsigned long millisLastPress = 0; // letzter tastendruck
+    static unsigned long millisLastRead = 0; // letztes sensor auslesen
+    unsigned long curMillis = millis();
+    buttonOn.loop();
+    // taste gedrueckt und anzeigezeit noch nicht gestartet ?
+    if (buttonOn.isPressed() && millisLastPress == 0) {
+        millisLastPress = curMillis; // zeitpunkt merken
+        Serial.println("starte anzeige");
+        //digitalWrite(PIN_SCREEN_POWER, HIGH);
+        initDisplay(false); // wire.begin nicht zur laufzeit aufrufen
+    }
 
-    readAndPrintBME280Data();
+    if  (curMillis - millisOld > 1000) {
+        // led toggeln / invertieren => lebenszeichen
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN)); 
+        millisOld = curMillis;
+    }
 
-    digitalWrite(LED_BUILTIN, HIGH); // turn the LED on (HIGH is the voltage level)
-    delay(2000);                     // wait for a second
-    digitalWrite(LED_BUILTIN, LOW);  // turn the LED off by making the voltage LOW
-    delay(2000);
+    // anzeigezeit abgelaufen ?
+    if (curMillis - millisLastPress > 5000 && millisLastPress > 0) {
+        // dann display ausschalten
+        digitalWrite(PIN_SCREEN_POWER, LOW);
+        millisLastPress = 0;
+        Serial.println("stoppe anzeige");
+    }
+    // anzeigezeit laeuft ? 
+    else if (millisLastPress > 0) {
+        // dann alle 1s werte anzeigen
+        if (!bme1SensorError) {
+            if (curMillis - millisLastRead > 1000) {
+                readAndPrintBME280Data();
+                millisLastRead = curMillis;
+            }
+        }
+    }
 }
 
 void readAndPrintBME280Data()
 {
-    // globale variablen aktualisieren
     temp1 = bme1.readTemperature();
     hum1 = bme1.readHumidity();
     press1 = bme1.readPressure() / 100;
 
     String Temperatur = String(temp1);
-    Serial.print("Temp = " + Temperatur + " °C | ");
+    Serial.print("Temp = " + Temperatur + " C | ");
 
     String feuchte = String(hum1);
     Serial.print("Feuchte = " + feuchte + " %RF | ");
@@ -119,16 +206,16 @@ void readAndPrintBME280Data()
     Serial.println("Druck = " + druck + " hPa");
 
     // lcd
-    // display.clearDisplay();
-    // display.setTextSize(2);
-    // display.setTextColor(WHITE);
-    // display.setCursor(1, 1);
-    // display.println(Temperatur + " C");
-    // // display.display(); // auftrag ausfuehren
-    // display.setCursor(1, 25);
-    // display.println(feuchte + " % RF");
-    // // display.display(); // auftrag ausfuehren
-    // display.setCursor(1, 50);
-    // display.println(druck + "  hPa");
-    // display.display(); // auftrag ausfuehren
+    displayPtr->clearDisplay();
+    displayPtr->setTextSize(2);
+    displayPtr->setTextColor(WHITE);
+    displayPtr->setCursor(1, 1);
+    displayPtr->println(Temperatur + " C");
+
+    displayPtr->setCursor(1, 25);
+    displayPtr->println(feuchte + " % RF");
+
+    displayPtr->setCursor(1, 50);
+    displayPtr->println(druck + "  hPa");
+    displayPtr->display(); // anzeige auftrag ausfuehren
 }
