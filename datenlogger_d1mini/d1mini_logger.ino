@@ -25,13 +25,17 @@
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
 
-#include <ezButton.h> // https://github.com/ArduinoGetStarted/button
-
 Adafruit_BME280 bme1;
 float temp1(NAN), hum1(NAN), press1(NAN);
 
 bool bme1SensorError = false; // bme sensor nicht vorhanden oder nicht ok?
 bool displayError = false; // display initialisierung fehlgeschlagen?
+
+// [ms] wie lange bleibt die anzeige an nach aktivierung ?
+const unsigned long MS_ANZEIGEDAUER = 5000; 
+
+// [us] wie lange darf ich schlafen bevor ich wieder messe ?
+const uint64_t US_SCHLAFINTERVAL = 10e6;
 
 // lcd defines
 #define OLED_RESET -1
@@ -48,12 +52,6 @@ Adafruit_SSD1306* displayPtr = NULL;
  * die einzige moeglichkeit die ich aktuell sehe. */
 
 #define PIN_SCREEN_POWER D7
-#define PIN_BUTTON_ON D6
-
-ezButton buttonOn = ezButton(PIN_BUTTON_ON); // einfache lib (inkl. entprellen)
-                                             // fuer buttons die direkt am pin
-                                             // angeschlossen sind und nach 
-                                             // masse schalten
 
 void initDisplay(bool periphBegin = false) {
     digitalWrite(PIN_SCREEN_POWER, HIGH); // display einschalten
@@ -87,15 +85,13 @@ void initDisplay(bool periphBegin = false) {
 
 void setup()
 {
-    
     Serial.begin(9600); // optional: aber praktisch fuer debug ausgaben ;)
     // while (!Serial) ; 
-    delay(1000);
+    delay(200);
     Serial.print("compiled: "); // kompilier zeitstempel ausgeben
     Serial.print(__DATE__);
     Serial.println(__TIME__);
     pinMode(LED_BUILTIN, OUTPUT);
-    buttonOn.setDebounceTime(50); // [ms]
 
     pinMode(PIN_SCREEN_POWER, OUTPUT); // spannungsversorgung vom display
     digitalWrite(PIN_SCREEN_POWER, HIGH); // display einschalten
@@ -123,7 +119,7 @@ void setup()
     }
 
     initDisplay(true);
-    delay(2000);
+    delay(200);
     displayPtr->clearDisplay();
     if (bme1SensorError) {
         displayPtr->setCursor(5, 0);
@@ -139,30 +135,18 @@ void setup()
     }
     displayPtr->display(); // Text zeigen
     WiFi.mode( WIFI_OFF );
-    //WiFi.mode( WIFI_AP );
-    //delay(2500);
 
     //digitalWrite(PIN_SCREEN_POWER, LOW); // display ausschalten -> strom sparen
-    //WiFi.forceSleepBegin(); 
+    WiFi.forceSleepBegin(); 
 
     //ESP.deepSleep(10e6); // [us]
 }
 
-
 void loop()
 {
     static unsigned long millisOld = 0;
-    static unsigned long millisLastPress = 0; // letzter tastendruck
     static unsigned long millisLastRead = 0; // letztes sensor auslesen
     unsigned long curMillis = millis();
-    buttonOn.loop();
-    // taste gedrueckt und anzeigezeit noch nicht gestartet ?
-    if (buttonOn.isPressed() && millisLastPress == 0) {
-        millisLastPress = curMillis; // zeitpunkt merken
-        Serial.println("starte anzeige");
-        //digitalWrite(PIN_SCREEN_POWER, HIGH);
-        initDisplay(false); // wire.begin nicht zur laufzeit aufrufen
-    }
 
     if  (curMillis - millisOld > 1000) {
         // led toggeln / invertieren => lebenszeichen
@@ -171,14 +155,15 @@ void loop()
     }
 
     // anzeigezeit abgelaufen ?
-    if (curMillis - millisLastPress > 5000 && millisLastPress > 0) {
+    if (curMillis > MS_ANZEIGEDAUER) {
         // dann display ausschalten
         digitalWrite(PIN_SCREEN_POWER, LOW);
-        millisLastPress = 0;
-        Serial.println("stoppe anzeige");
+        Serial.println("stoppe anzeige. lege mich schlafen...");
+        ESP.deepSleep(US_SCHLAFINTERVAL); // [us]
+
     }
     // anzeigezeit laeuft ? 
-    else if (millisLastPress > 0) {
+    else {
         // dann alle 1s werte anzeigen
         if (!bme1SensorError) {
             if (curMillis - millisLastRead > 1000) {
