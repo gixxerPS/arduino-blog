@@ -47,10 +47,10 @@ bool bme1SensorError = false; // bme sensor nicht vorhanden oder nicht ok?
 bool displayError = false; // display initialisierung fehlgeschlagen?
 
 // [ms] wie lange bleibt die anzeige an nach aktivierung ?
-const unsigned long MS_ANZEIGEDAUER = 5000000; 
+const unsigned long MS_ANZEIGEDAUER = 10000; 
 
 // [us] wie lange darf ich schlafen bevor ich wieder messe ?
-const uint64_t US_SCHLAFINTERVAL = 10e6;
+const uint64_t US_SCHLAFINTERVAL = 120e6;
 
 const String NAME_LOGDATEI = "loggerDaten";
 const String NAME_LOGDATEI_CSV = NAME_LOGDATEI + String(".csv");
@@ -69,11 +69,18 @@ Adafruit_SSD1306* displayPtr = NULL;
  * wir es bei uns loesen und da sind die new / delete operatoren
  * die einzige moeglichkeit die ich aktuell sehe. */
 
-// Achtung: D4 ist auch der Pin der User LED
+// Achtung: D4 ist auch der Pin der User LED beim D1 mini
 #define PIN_SCREEN_POWER D4
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
+/**
+ * diese setup funktion koennte man dynamisch zur Laufzeit aufrufen.
+ * damit koennte das display ein-/ausgeschaltet werden ohne dass
+ * der controller neugestartet / geresettet werden muss. 
+ * in diesem fall muesste es mit periphBegin = false aufgerufen werden
+ * um das einfrieren durch doppelten aufruf von Wire.begin() 
+ * zu vermeiden. */
 void setupDisplay(bool periphBegin = false) {
     digitalWrite(PIN_SCREEN_POWER, HIGH); // display einschalten
     delay(100); // etwas zeit geben zum spannung stabilisieren (WICHTIG)
@@ -154,12 +161,10 @@ void setupRTC()
             // Common Causes:
             //    1) first time you ran and the device wasn't running yet
             //    2) the battery on the device is low or even missing
-
             Serial.println("RTC lost confidence in the DateTime!");
             // following line sets the RTC to the date & time this sketch was compiled
             // it will also reset the valid flag internally unless the Rtc device is
             // having an issue
-
             Rtc.SetDateTime(compiled);
         }
     }
@@ -238,11 +243,7 @@ void setup()
     }
     displayPtr->display(); // Text zeigen
     WiFi.mode( WIFI_OFF );
-
-    //digitalWrite(PIN_SCREEN_POWER, LOW); // display ausschalten -> strom sparen
     WiFi.forceSleepBegin(); 
-
-    //ESP.deepSleep(10e6); // [us]
 }
 
 void readRTC() {
