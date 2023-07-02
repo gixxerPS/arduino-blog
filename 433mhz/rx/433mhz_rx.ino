@@ -2,7 +2,8 @@
  * Hardware:
  * - arduino mega PRO mini
  * - RXB8 433MHz empfaenger
- *     D9 Data
+ *     D9 Data bei ASK
+ *     D2 Data bei rcswitch
  */
 
 // #include <RH_ASK.h> // https://github.com/PaulStoffregen/RadioHead
@@ -17,7 +18,6 @@
 
 #include <RCSwitch.h> // https://github.com/sui77/rc-switch/
 RCSwitch mySwitch = RCSwitch();
-
 
 void setup()
 {
@@ -35,36 +35,32 @@ void setup()
     //     Serial.println("init failed");
     // }
 
-    // mySwitch.enableReceive(0);  // Receiver on interrupt 0 => that is pin D21 on mega pro mini
-    mySwitch.enableReceive(4);  // Receiver on interrupt 4 => that is pin D2
+    mySwitch.enableReceive(0);  // interrupt nr 0 liegt auf D2 beim arduino mega pro mini
 }
 
 void loop()
 {
-    uint8_t buf[RH_ASK_MAX_MESSAGE_LEN];
-    uint8_t buflen = sizeof(buf);
-    static int i;
-    if (driver.recv(buf, &buflen)) // Non-blocking
-    {
-        i++;
-        Serial.print(i);
-        // Message with a good checksum received, dump it.
-        driver.printBuffer(" Got:", buf, buflen);
-    }
+    // uint8_t buf[RH_ASK_MAX_MESSAGE_LEN];
+    // uint8_t buflen = sizeof(buf);
+    // static int i;
+    // if (driver.recv(buf, &buflen)) // Non-blocking
+    // {
+    //     i++;
+    //     Serial.print(i);
+    //     // Message with a good checksum received, dump it.
+    //     driver.printBuffer(" Got:", buf, buflen);
+    // }
 
-//     if (mySwitch.available()) {
+    if (mySwitch.available()) {
     
-//     Serial.print("Received ");
-//     Serial.print( mySwitch.getReceivedValue() );
-//     Serial.print(" / ");
-//     Serial.print( mySwitch.getReceivedBitlength() );
-//     Serial.print("bit ");
-//     Serial.print("Protocol: ");
-//     Serial.println( mySwitch.getReceivedProtocol() );
+        Serial.print("Received ");
+        Serial.print( mySwitch.getReceivedValue() );
+        Serial.print(" / ");
+        Serial.print( mySwitch.getReceivedBitlength() );
+        Serial.print("bit ");
+        Serial.print("Protocol: ");
+        Serial.println( mySwitch.getReceivedProtocol() );
 
-//     mySwitch.resetAvailable();
-//   }
-
+        mySwitch.resetAvailable();
+    }
 }
-
-

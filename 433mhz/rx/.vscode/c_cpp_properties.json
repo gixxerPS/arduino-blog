@@ -18,8 +18,7 @@
             "includePath": [
                 "/home/mint/.arduino15/packages/arduino/hardware/avr/1.8.5/cores/arduino",
                 "/home/mint/.arduino15/packages/arduino/hardware/avr/1.8.5/variants/mega",
-                "/home/mint/Arduino/libraries/RadioHead",
-                "/home/mint/.arduino15/packages/arduino/hardware/avr/1.8.5/libraries/SPI/src",
+                "/home/mint/Arduino/libraries/rc-switch",
                 "/home/mint/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/lib/gcc/avr/7.3.0/include",
                 "/home/mint/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/lib/gcc/avr/7.3.0/include-fixed",
                 "/home/mint/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/avr/include"
