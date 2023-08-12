@@ -215,10 +215,11 @@ void setupBME280()
 
 void setup()
 {
-    Serial.begin(9600); // optional: aber praktisch fuer debug ausgaben ;)
+    Serial.begin(74880); // optional: aber praktisch fuer debug ausgaben ;)
     while (!Serial) ; 
     delay(200);
     Serial.println(">>>>>>>>>>>>>>>>>>>> Starte Datenlogger...");
+    Serial.println(ESP.getFlashChipId(),HEX);
 
     pinMode(PIN_SCREEN_POWER, OUTPUT); // spannungsversorgung vom display
     digitalWrite(PIN_SCREEN_POWER, HIGH); // display einschalten
@@ -242,8 +243,9 @@ void setup()
         displayPtr->print("Datenlogger");
     }
     displayPtr->display(); // Text zeigen
-    WiFi.mode( WIFI_OFF );
-    WiFi.forceSleepBegin(); 
+    // WiFi.mode( WIFI_AP /*WIFI_OFF*/ );
+    // WiFi.forceSleepBegin(); 
+    // WiFi.forceSleepWake();
 }
 
 void readRTC() {
@@ -298,6 +300,7 @@ void loop()
         //digitalWrite(PIN_SCREEN_POWER, LOW);
         Serial.println("stoppe anzeige. lege mich schlafen...");
         ESP.deepSleep(US_SCHLAFINTERVAL); // [us]
+        delay(100);
     } else { // anzeigezeit laeuft ? 
         // dann alle 2s werte anzeigen/schreiben
         if (curMillis - millisLastRead > 2000) {
