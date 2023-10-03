@@ -9,8 +9,8 @@ HOST = '192.168.2.64'
 def on_message_print(client, userdata, message):
     print("%s %s" % (message.topic, message.payload))
 
-subscribe.callback(on_message_print, "test", hostname=HOST)
-
+#subscribe.callback(on_message_print, "test", hostname=HOST)
+subscribe.callback(on_message_print, "gartenhaus/sensorData/#", hostname=HOST)
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, flags, rc):
